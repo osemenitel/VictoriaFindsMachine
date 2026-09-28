@@ -1,21 +1,58 @@
-import https from 'https';
-
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
 
 if (!TELEGRAM_TOKEN || !TELEGRAM_CHAT_ID) {
-  console.error('❌ Ошибка: Не найдены секреты!');
+  console.error('❌ Ошибка: Не найдены секреты Telegram!');
   process.exit(1);
 }
 
-function sendVideoToTelegram() {
-  console.log('🚀 Запуск отправки на пульт Telegram...');
+async function runFactory() {
+  console.log('🚀 Запуск поиска китайских трендов...');
+  
+  // Резервные данные, если парсер ничего не найдет
+  let finalVideoUrl = 'https://www.w3schools.com/html/mov_bbb.mp4';
+  let finalDescription = 'Инновационная технологичная новинка из Китая';
 
-  const data = JSON.stringify({
+  if (RAPIDAPI_KEY) {
+    try {
+      console.log('🔍 Подключаемся к Douyin API...');
+      const response = await fetch('https://douyin-media-no-watermark.p.rapidapi.com/web/search', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'X-RapidAPI-Key': RAPIDAPI_KEY,
+          'X-RapidAPI-Host': 'douyin-media-no-watermark.p.rapidapi.com'
+        },
+        body: JSON.stringify({ count: 5, keyword: '科技 创意 0ffer', offset: 0 })
+      });
+      
+      const data = await response.json();
+      const videos = data?.data?.videos || data?.aweme_list || [];
+      
+      if (videos.length > 0) {
+        const randomVideo = videos[Math.floor(Math.random() * videos.length)];
+        const url = randomVideo.play_addr?.url_list?.[0] || randomVideo.video?.play_addr?.url_list?.[0];
+        
+        if (url) {
+            finalVideoUrl = url;
+            finalDescription = randomVideo.desc || finalDescription;
+            console.log(`✅ Реальное видео найдено: ${finalDescription}`);
+        }
+      }
+    } catch (error) {
+      console.error('⚠️ Ошибка связи с парсером:', error.message);
+    }
+  }
+
+  console.log('📱 Отправка видео на пульт Telegram...');
+  const telegramUrl = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendVideo`;
+  const captionText = `🔥 Народ, вы эту дичь видели?! ${finalDescription}.\n\nКитайцы опять пробили потолок! Берем или хлам? 👇`;
+
+  const payload = {
     chat_id: TELEGRAM_CHAT_ID,
-    // Вот здесь 100% рабочая ссылка, которую Телеграм скачает без ошибок:
-    video: 'https://www.w3schools.com/html/mov_bbb.mp4', 
-    caption: '🔥 Народ, вы эту дичь видели?! Умный держатель для телефона с автонаведением.\n\nКитайцы опять пробили потолок! Берем или хлам? 👇',
+    video: finalVideoUrl,
+    caption: captionText,
     reply_markup: {
       inline_keyboard: [
         [
@@ -24,44 +61,20 @@ function sendVideoToTelegram() {
         ]
       ]
     }
-  });
-
-  const options = {
-    hostname: 'api.telegram.org',
-    port: 443,
-    path: `/bot${TELEGRAM_TOKEN}/sendVideo`,
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Content-Length': Buffer.byteLength(data)
-    }
   };
 
-  const req = https.request(options, (res) => {
-    let responseBody = '';
-
-    res.on('data', (chunk) => {
-      responseBody += chunk;
-    });
-
-    res.on('end', () => {
-      if (res.statusCode === 200) {
-        console.log('✅ Успешно! Ролик доставлен в Telegram.');
-        process.exit(0);
-      } else {
-        console.error(`❌ Ошибка Telegram API (Код ${res.statusCode}):`, responseBody);
-        process.exit(1);
-      }
-    });
+  const tgResponse = await fetch(telegramUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
   });
 
-  req.on('error', (error) => {
-    console.error('❌ Сетевая ошибка:', error.message);
+  if (tgResponse.ok) {
+    console.log('✅ Готовый ролик доставлен в Telegram!');
+  } else {
+    console.error('❌ Ошибка Телеграма:', await tgResponse.text());
     process.exit(1);
-  });
-
-  req.write(data);
-  req.end();
+  }
 }
 
-sendVideoToTelegram();
+runFactory();
