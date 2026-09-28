@@ -1,0 +1,26 @@
+name: Victoria Factory Start
+
+on:
+  workflow_dispatch: # Эта строчка создает нам кнопку для ручного запуска
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Скачиваем код из репозитория
+      uses: actions/checkout@v4
+
+    - name: Устанавливаем среду Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Скачиваем нужные библиотеки
+      run: npm install
+
+    - name: ЗАПУСК СТАНКА (Тест ИИ)
+      env:
+        TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        POLZA_API_KEY: ${{ secrets.POLZA_API_KEY }}
+      run: node index.js
