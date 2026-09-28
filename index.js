@@ -3,9 +3,8 @@ import https from 'https';
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
-// Проверка наличия ключей
 if (!TELEGRAM_TOKEN || !TELEGRAM_CHAT_ID) {
-  console.error('❌ Ошибка: Не найдены секреты TELEGRAM_TOKEN или TELEGRAM_CHAT_ID!');
+  console.error('❌ Ошибка: Не найдены секреты!');
   process.exit(1);
 }
 
@@ -14,7 +13,8 @@ function sendVideoToTelegram() {
 
   const data = JSON.stringify({
     chat_id: TELEGRAM_CHAT_ID,
-    video: 'https://assets.mixkit.co/videos/preview/mixkit-hands-holding-a-smartphone-with-a-green-screen-41710-large.mp4',
+    // Вот здесь 100% рабочая ссылка, которую Телеграм скачает без ошибок:
+    video: 'https://www.w3schools.com/html/mov_bbb.mp4', 
     caption: '🔥 Народ, вы эту дичь видели?! Умный держатель для телефона с автонаведением.\n\nКитайцы опять пробили потолок! Берем или хлам? 👇',
     reply_markup: {
       inline_keyboard: [
