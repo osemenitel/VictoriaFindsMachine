@@ -1,21 +1,20 @@
 import TelegramBot from 'node-telegram-bot-api';
 import axios from 'axios';
 
-// Достаем секретные ключи из окружения (передаст GitHub Actions)
+// Достаем ключи
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const POLZA_API_KEY = process.env.POLZA_API_KEY;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID; // Твой ID
 
-// Инициализируем бота
-const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: false }); // polling: false важно для бессерверной архитектуры
+const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: false });
 
-// Функция для теста связи с ИИ Gemini через Polza.ai
 async function testGeminiConnection() {
   try {
     const response = await axios.post(
       'https://polza.ai/api/v1/chat/completions',
       {
         model: 'google/gemini-3.1-flash-lite',
-        messages: [{ role: 'user', content: 'Привет! Напиши одно короткое слово, чтобы я знал, что ты работаешь.' }]
+        messages: [{ role: 'user', content: 'Напиши коротко: "Связь с ИИ установлена!"' }]
       },
       {
         headers: {
@@ -27,25 +26,24 @@ async function testGeminiConnection() {
     return response.data.choices[0].message.content;
   } catch (error) {
     console.error('Ошибка ИИ:', error.response ? error.response.data : error.message);
-    return 'Ошибка ИИ';
+    return 'Ошибка связи с ИИ';
   }
 }
 
-// Главная функция, которая запускается при старте
 async function main() {
   try {
-    console.log('Запуск фабрики Виктории...');
+    // 1. Тестируем ИИ
+    const aiMessage = await testGeminiConnection();
     
-    // Тестируем ИИ
-    const aiResponse = await testGeminiConnection();
-    console.log(`Ответ от Gemini: ${aiResponse}`);
-
-    // Отправляем тебе тестовое сообщение в Телеграм (замени ТВОЙ_ID на твой Telegram ID, мы найдем его позже)
-    // Пока просто выведем в лог, что бот готов
-    console.log('Все ключи подключены верно. Бот готов к приему команд!');
+    // 2. Формируем сообщение для тебя
+    const finalMessage = `🤖 Привет, бро! Завод Виктории запущен.\n\nПроверка систем:\n✅ Токен Telegram: работает\n✅ Токен Gemini: ${aiMessage}`;
+    
+    // 3. Отправляем в Телеграм
+    await bot.sendMessage(TELEGRAM_CHAT_ID, finalMessage);
+    console.log('Сообщение успешно отправлено в Telegram!');
     
   } catch (error) {
-    console.error('Критическая ошибка:', error);
+    console.error('Ошибка отправки:', error);
   }
 }
 
