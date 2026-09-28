@@ -7,7 +7,6 @@ if (!TELEGRAM_TOKEN || !TELEGRAM_CHAT_ID || !RAPIDAPI_KEY) {
   process.exit(1);
 }
 
-// Отправка текстовых логов прямо в Телеграм при сбоях
 async function sendTgLog(text) {
   await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
     method: 'POST',
@@ -20,11 +19,13 @@ async function runFactory() {
   console.log('🚀 Запуск поиска в TikTok...');
 
   try {
-    // 1. Поиск трендов (умные гаджеты из Китая)
-    const keyword = encodeURIComponent('smart gadgets china');
+    // 1. Массив простых однословных запросов, чтобы парсер не тупил
+    const keywords = ['gadget', 'inventions', 'tech', 'tools'];
+    const randomKeyword = keywords[Math.floor(Math.random() * keywords.length)];
     
-    // Точная ссылка по твоему скриншоту из RapidAPI
-    const searchUrl = `https://tiktok-api23.p.rapidapi.com/api/search/video?cursor=0&search_id=0&keyword=${keyword}`;
+    console.log(`🔍 Ищем по слову: ${randomKeyword}`);
+    
+    const searchUrl = `https://tiktok-api23.p.rapidapi.com/api/search/video?cursor=0&search_id=0&keyword=${randomKeyword}`;
 
     const apiResponse = await fetch(searchUrl, {
       method: 'GET',
@@ -37,10 +38,10 @@ async function runFactory() {
     const data = await apiResponse.json();
     
     // Ищем список роликов в ответе API
-    const videoList = data?.data?.list || data?.item_list || data?.data?.videos || data?.data || [];
+    const videoList = data?.item_list || data?.data?.list || data?.data?.videos || data?.data || [];
 
     if (!videoList.length || !Array.isArray(videoList)) {
-      await sendTgLog(`⚠️ Парсер не вернул видео. Ответ API:\n\n${JSON.stringify(data).slice(0, 400)}`);
+      await sendTgLog(`⚠️ По слову \({randomKeyword} парсер вернул пустоту. Ответ API:\n\n\){JSON.stringify(data).slice(0, 400)}`);
       return;
     }
 
@@ -55,7 +56,6 @@ async function runFactory() {
       item?.download_url || 
       item?.video_url;
 
-    // Убираем лишние хештеги из описания
     let description = item?.desc || item?.title || 'Китайская технологичная новинка';
     description = description.replace(/#\w+/g, '').trim();
 
