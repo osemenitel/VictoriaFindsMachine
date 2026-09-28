@@ -8,10 +8,10 @@ if (!TELEGRAM_TOKEN || !TELEGRAM_CHAT_ID || !RAPIDAPI_KEY) {
 }
 
 async function sendTgLog(text) {
-  await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+  await fetch("https://api.telegram.org/bot" + TELEGRAM_TOKEN + "/sendMessage", {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text })
+    body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: text })
   });
 }
 
@@ -19,13 +19,12 @@ async function runFactory() {
   console.log('🚀 Запуск поиска в TikTok...');
 
   try {
-    // 1. Массив простых однословных запросов, чтобы парсер не тупил
-    const keywords = ['gadget', 'inventions', 'tech', 'tools'];
+    const keywords = ['gadget', 'tech', 'smart', 'tool'];
     const randomKeyword = keywords[Math.floor(Math.random() * keywords.length)];
     
-    console.log(`🔍 Ищем по слову: ${randomKeyword}`);
+    console.log("🔍 Ищем по слову: " + randomKeyword);
     
-    const searchUrl = `https://tiktok-api23.p.rapidapi.com/api/search/video?cursor=0&search_id=0&keyword=${randomKeyword}`;
+    const searchUrl = "https://tiktok-api23.p.rapidapi.com/api/search/video?cursor=0&search_id=0&keyword=" + randomKeyword;
 
     const apiResponse = await fetch(searchUrl, {
       method: 'GET',
@@ -37,18 +36,17 @@ async function runFactory() {
 
     const data = await apiResponse.json();
     
-    // Ищем список роликов в ответе API
     const videoList = data?.item_list || data?.data?.list || data?.data?.videos || data?.data || [];
 
     if (!videoList.length || !Array.isArray(videoList)) {
-      await sendTgLog(`⚠️ По слову \({randomKeyword} парсер вернул пустоту. Ответ API:\n\n\){JSON.stringify(data).slice(0, 400)}`);
+      // Здесь используем железное склеивание через плюс
+      const errorMsg = "⚠️ По слову '" + randomKeyword + "' парсер вернул пустоту. Ответ API:\n\n" + JSON.stringify(data).slice(0, 400);
+      await sendTgLog(errorMsg);
       return;
     }
 
-    // Выбираем случайное видео из выдачи
     const item = videoList[Math.floor(Math.random() * videoList.length)];
     
-    // Достаем ссылку на видеопоток
     const videoUrl = 
       item?.video?.play_addr?.url_list?.[0] || 
       item?.video?.download_addr?.url_list?.[0] ||
@@ -60,27 +58,25 @@ async function runFactory() {
     description = description.replace(/#\w+/g, '').trim();
 
     if (!videoUrl) {
-      await sendTgLog(`⚠️ Ролик найден, но ссылка скрыта сервером:\n${JSON.stringify(item).slice(0, 300)}`);
+      await sendTgLog("⚠️ Ролик найден, но ссылка скрыта сервером:\n" + JSON.stringify(item).slice(0, 300));
       return;
     }
 
-    console.log(`🎬 Найдено видео: ${description}`);
-    console.log(`🔗 Скачиваем поток: ${videoUrl}`);
+    console.log("🎬 Найдено видео: " + description);
+    console.log("🔗 Скачиваем поток: " + videoUrl);
 
-    // 2. Скачиваем видео на сервер GitHub
     const videoStream = await fetch(videoUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
     });
     
     if (!videoStream.ok) {
-       await sendTgLog(`❌ Ошибка скачивания видео с серверов TikTok. Код: ${videoStream.status}`);
+       await sendTgLog("❌ Ошибка скачивания видео с серверов TikTok. Код: " + videoStream.status);
        return;
     }
     
     const videoBlob = await videoStream.blob();
 
-    // 3. Формируем публикацию для пульта
-    const captionText = `🔥 Народ, вы эту дичь видели?! ${description}.\n\nБерем или хлам? 👇`;
+    const captionText = "🔥 Народ, вы эту дичь видели?! " + description + ".\n\nБерем или хлам? 👇";
 
     const formData = new FormData();
     formData.append('chat_id', TELEGRAM_CHAT_ID);
@@ -96,7 +92,7 @@ async function runFactory() {
     }));
 
     console.log('📱 Отправляем готовый файл в Telegram...');
-    const tgRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendVideo`, {
+    const tgRes = await fetch("https://api.telegram.org/bot" + TELEGRAM_TOKEN + "/sendVideo", {
       method: 'POST',
       body: formData
     });
@@ -107,13 +103,13 @@ async function runFactory() {
       process.exit(0);
     } else {
       console.error('❌ Ошибка отправки в TG:', tgData);
-      await sendTgLog(`❌ Ошибка Telegram: ${tgData.description}`);
+      await sendTgLog("❌ Ошибка Telegram: " + tgData.description);
       process.exit(1);
     }
 
   } catch (error) {
     console.error('❌ Сбой конвейера:', error);
-    await sendTgLog(`❌ Сбой скрипта: ${error.message}`);
+    await sendTgLog("❌ Сбой скрипта: " + error.message);
     process.exit(1);
   }
 }
