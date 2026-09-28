@@ -6,34 +6,38 @@ const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const POLZA_API_KEY = process.env.POLZA_API_KEY;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
-// Включаем polling, чтобы бот мог принимать команды и сообщения от тебя
-const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
+// polling: false обязателен для GitHub Actions (запустился, сделал дело, выключился)
+const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: false });
 
-console.log('Завод Виктории запущен в режиме пульта управления...');
+async function main() {
+  try {
+    console.log('Завод Виктории: запуск обработки видео...');
 
-// Обработка входящих сообщений/видео от тебя
-bot.on('message', async (msg) => {
-  const chatId = msg.chat.id;
+    // Здесь в будущем скрипт будет скачивать трендовое видео, 
+    // убирать иероглифы через видеоредактор и готовить его к публикации.
 
-  // Проверяем, чтобы сообщения шли только от тебя (безопасность превыше всего)
-  if (String(chatId) !== String(TELEGRAM_CHAT_ID)) {
-    return;
+    // Пока тестируем связку с кнопками подтверждения для твоего пульта:
+    const caption = "🔥 Находка из Китая!\n\n💬 Реплика для видео: «Народ, вы эту дичь вообще видели?!»\n\nПубликуем в группу ВК «Виктория | Находки»?";
+
+    // Создаем интерактивные кнопки "Одобрить" и "Удалить"
+    const inlineKeyboard = {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '✅ Одобрить (В ВК)', callback_data: 'publish_vk' },
+            { text: '❌ Удалить', callback_data: 'delete_item' }
+          ]
+        ]
+      }
+    };
+
+    // Отправляем тестовое сообщение с кнопками в твой Telegram
+    await bot.sendMessage(TELEGRAM_CHAT_ID, caption, inlineKeyboard);
+    console.log('Пульт управления: ролик отправлен на согласование!');
+
+  } catch (error) {
+    console.error('Ошибка на заводе:', error);
   }
+}
 
-  const text = msg.text;
-
-  if (text === '/start') {
-    await bot.sendMessage(chatId, '🤖 Пульт управления заводом Виктории активен. Жду видео для обработки и отправки в ВК!');
-    return;
-  }
-
-  // Если ты скинул видео или файл
-  if (msg.video || msg.document) {
-    await bot.sendMessage(chatId, '⚙️ Ролик принят в обработку! Чищу иероглифы, готовлю для публикации в ВК...');
-    
-    // Здесь в следующих шагах мы подключим логику обработки видео и отправки с кнопками "Да/Нет"
-    setTimeout(async () => {
-      await bot.sendMessage(chatId, '✅ Ролик обработан! (Тестовый режим). Публикуем в группу ВК?');
-    }, 2000);
-  }
-});
+main();
