@@ -1,18 +1,52 @@
 import TelegramBot from 'node-telegram-bot-api';
+import axios from 'axios';
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+// В будущем сюда добавим ключи от парсера Douyin и видеоредактора
 
 const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: false });
 
-async function sendVideoToPanel() {
+// ШАГ 1: ПАРСЕР (Ищет трендовые китайские гаджеты)
+async function parseTrendingDouyinVideo() {
+  console.log('🔍 Парсер запущен: ищем хайповые новинки и гаджеты...');
+  
+  // Здесь будет реальное подключение к API Douyin/TikTok для сбора трендов.
+  // Пока мы его не подключили, скрипт имитирует нахождение крутого ролика.
+  return {
+    sourceUrl: 'https://api.example.com/raw_gadget_video.mp4',
+    description: 'Умная китайская швабра с встроенным пылесосом и лазером',
+    views: 1500000
+  };
+}
+
+// ШАГ 2: ИИ-РЕДАКТОР (Монтаж, уникализация, Виктория)
+async function editVideoWithAI(rawVideoData) {
+  console.log(`⚙️ Видеоредактор получил ролик: ${rawVideoData.description}`);
+  console.log('✂️ Уникализация: обрезка иероглифов, изменение битрейта...');
+  console.log('👱‍♀️ Наложение Виктории: добавляем эмоцию [Шок] в угол кадра...');
+  
+  // Здесь будет команда для Remotion или твоего ИИ-редактора на сборку ролика.
+  // Сейчас мы передаем команду, что ролик "смонтирован".
+  return {
+    finalVideoUrl: 'https://cdn.pixabay.com/video/2024/05/13/211904_large.mp4', // Временная ссылка на красивое техно-видео для проверки телеграма
+    vkPostText: `🔥 Народ, вы эту дичь видели?! ${rawVideoData.description}. Китайцы опять пробили потолок! Берем или хлам? 👇`
+  };
+}
+
+// ШАГ 3: ПУЛЬТ УПРАВЛЕНИЯ (Отправка тебе в Теленрам)
+async function runFactoryPipeline() {
   try {
-    console.log('🎬 Завод Виктории: Отправка готового видео на пульт в Telegram...');
+    console.log('🚀 ЗАПУСК ПОЛНОГО ЦИКЛА ФАБРИКИ...');
 
-    // Текст, который пойдет в ВК
-    const vkPostText = "🔥 Смотрите, какую дичь китайцы придумали на этот раз! Очередная находка для дома. Как думаете, годная вещь или в мусорку?";
+    // 1. Находим видео
+    const trend = await parseTrendingDouyinVideo();
+    
+    // 2. Монтируем видео
+    const editedContent = await editVideoWithAI(trend);
 
-    // Твои кнопки управления
+    // 3. Отправляем на пульт
+    console.log('📱 Отправка готового материала на пульт...');
     const inlineKeyboard = {
       reply_markup: {
         inline_keyboard: [
@@ -24,20 +58,16 @@ async function sendVideoToPanel() {
       }
     };
 
-    // Тестовое видео-заглушка (потом сюда будет прилетать видео от Remotion)
-    const testVideoUrl = 'https://www.w3schools.com/html/mov_bbb.mp4';
-
-    // Отправляем ВИДЕО + ТЕКСТ + КНОПКИ
-    await bot.sendVideo(TELEGRAM_CHAT_ID, testVideoUrl, {
-      caption: vkPostText,
+    await bot.sendVideo(TELEGRAM_CHAT_ID, editedContent.finalVideoUrl, {
+      caption: editedContent.vkPostText,
       reply_markup: inlineKeyboard.reply_markup
     });
 
-    console.log('✅ Видео с кнопками успешно отправлено тебе в личку!');
+    console.log('✅ Цикл завершен! Видео ждет твоего решения в Telegram.');
 
   } catch (error) {
-    console.error('❌ Ошибка отправки видео:', error);
+    console.error('❌ Ошибка на конвейере:', error);
   }
 }
 
-sendVideoToPanel();
+runFactoryPipeline();
