@@ -1,63 +1,67 @@
-import axios from 'axios';
+const https = require('https');
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
-async function runFactory() {
-  try {
-    console.log('🚀 СТАРТ КОНВЕЙЕРА...');
+// Проверка наличия ключей
+if (!TELEGRAM_TOKEN || !TELEGRAM_CHAT_ID) {
+  console.error('❌ Ошибка: Не найдены секреты TELEGRAM_TOKEN или TELEGRAM_CHAT_ID!');
+  process.exit(1);
+}
 
-    const realGadgetsPool = [
-      {
-        videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-futuristic-robotic-arm-working-in-a-factory-42867-large.mp4',
-        description: 'Ультраточный робот-манипулятор для домашней мастерской'
-      },
-      {
-        videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-hands-holding-a-smartphone-with-a-green-screen-41710-large.mp4',
-        description: 'Умный держатель для телефона с автонаведением и беспроводной зарядкой'
-      },
-      {
-        videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-digital-animation-of-screens-with-tech-interface-31918-large.mp4',
-        description: 'Компактный лазерный уровень с проекцией на 360 градусов'
-      }
-    ];
+function sendVideoToTelegram() {
+  console.log('🚀 Запуск отправки на пульт Telegram...');
 
-    const selectedGadget = realGadgetsPool[Math.floor(Math.random() * realGadgetsPool.length)];
-    console.log(`✅ Выбран ролик: ${selectedGadget.description}`);
-
-    const emotions = ['vic_shock', 'vic_facepalm', 'vic_think', 'vic_laugh', 'vic_sign'];
-    const selectedEmotion = emotions[Math.floor(Math.random() * emotions.length)];
-    console.log(`👩 Реакция Виктории: ${selectedEmotion}.png`);
-
-    const captionText = `🔥 Народ, вы эту дичь видели?! ${selectedGadget.description}.\n\nКитайцы опять пробили потолок! Берем или хлам? 👇`;
-
-    const inlineKeyboard = {
+  const data = JSON.stringify({
+    chat_id: TELEGRAM_CHAT_ID,
+    video: 'https://assets.mixkit.co/videos/preview/mixkit-hands-holding-a-smartphone-with-a-green-screen-41710-large.mp4',
+    caption: '🔥 Народ, вы эту дичь видели?! Умный держатель для телефона с автонаведением.\n\nКитайцы опять пробили потолок! Берем или хлам? 👇',
+    reply_markup: {
       inline_keyboard: [
         [
           { text: '✅ Одобрить (ВК)', callback_data: 'publish_vk' },
           { text: '❌ В топку', callback_data: 'delete_video' }
         ]
       ]
-    };
+    }
+  });
 
-    console.log('📱 Отправка данных в Telegram напрямую через API...');
+  const options = {
+    hostname: 'api.telegram.org',
+    port: 443,
+    path: `/bot${TELEGRAM_TOKEN}/sendVideo`,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(data)
+    }
+  };
 
-    const telegramUrl = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendVideo`;
-    
-    await axios.post(telegramUrl, {
-      chat_id: TELEGRAM_CHAT_ID,
-      video: selectedGadget.videoUrl,
-      caption: captionText,
-      reply_markup: inlineKeyboard
+  const req = https.request(options, (res) => {
+    let responseBody = '';
+
+    res.on('data', (chunk) => {
+      responseBody += chunk;
     });
 
-    console.log('✅ Готовый ролик успешно доставлен в Telegram!');
-    process.exit(0);
+    res.on('end', () => {
+      if (res.statusCode === 200) {
+        console.log('✅ Успешно! Ролик доставлен в Telegram.');
+        process.exit(0);
+      } else {
+        console.error(`❌ Ошибка Telegram API (Код ${res.statusCode}):`, responseBody);
+        process.exit(1);
+      }
+    });
+  });
 
-  } catch (error) {
-    console.error('❌ Ошибка отправки:', error.response?.data || error.message);
+  req.on('error', (error) => {
+    console.error('❌ Сетевая ошибка:', error.message);
     process.exit(1);
-  }
+  });
+
+  req.write(data);
+  req.end();
 }
 
-runFactory();
+sendVideoToTelegram();
