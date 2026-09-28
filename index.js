@@ -1,43 +1,43 @@
 import TelegramBot from 'node-telegram-bot-api';
-import axios from 'axios';
 
-// Достаем ключи из сейфа
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
-const POLZA_API_KEY = process.env.POLZA_API_KEY;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
-// polling: false обязателен для GitHub Actions (запустился, сделал дело, выключился)
 const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: false });
 
-async function main() {
+async function sendVideoToPanel() {
   try {
-    console.log('Завод Виктории: запуск обработки видео...');
+    console.log('🎬 Завод Виктории: Отправка готового видео на пульт в Telegram...');
 
-    // Здесь в будущем скрипт будет скачивать трендовое видео, 
-    // убирать иероглифы через видеоредактор и готовить его к публикации.
+    // Текст, который пойдет в ВК
+    const vkPostText = "🔥 Смотрите, какую дичь китайцы придумали на этот раз! Очередная находка для дома. Как думаете, годная вещь или в мусорку?";
 
-    // Пока тестируем связку с кнопками подтверждения для твоего пульта:
-    const caption = "🔥 Находка из Китая!\n\n💬 Реплика для видео: «Народ, вы эту дичь вообще видели?!»\n\nПубликуем в группу ВК «Виктория | Находки»?";
-
-    // Создаем интерактивные кнопки "Одобрить" и "Удалить"
+    // Твои кнопки управления
     const inlineKeyboard = {
       reply_markup: {
         inline_keyboard: [
           [
-            { text: '✅ Одобрить (В ВК)', callback_data: 'publish_vk' },
-            { text: '❌ Удалить', callback_data: 'delete_item' }
+            { text: '✅ Одобрить (Отправить в ВК)', callback_data: 'publish_vk' },
+            { text: '❌ В топку', callback_data: 'delete_video' }
           ]
         ]
       }
     };
 
-    // Отправляем тестовое сообщение с кнопками в твой Telegram
-    await bot.sendMessage(TELEGRAM_CHAT_ID, caption, inlineKeyboard);
-    console.log('Пульт управления: ролик отправлен на согласование!');
+    // Тестовое видео-заглушка (потом сюда будет прилетать видео от Remotion)
+    const testVideoUrl = 'https://www.w3schools.com/html/mov_bbb.mp4';
+
+    // Отправляем ВИДЕО + ТЕКСТ + КНОПКИ
+    await bot.sendVideo(TELEGRAM_CHAT_ID, testVideoUrl, {
+      caption: vkPostText,
+      reply_markup: inlineKeyboard.reply_markup
+    });
+
+    console.log('✅ Видео с кнопками успешно отправлено тебе в личку!');
 
   } catch (error) {
-    console.error('Ошибка на заводе:', error);
+    console.error('❌ Ошибка отправки видео:', error);
   }
 }
 
-main();
+sendVideoToPanel();
