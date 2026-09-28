@@ -1,7 +1,7 @@
-name: Victoria Factory Start
+name: Victoria Factory Pipeline
 
 on:
-  workflow_dispatch: # Эта строчка создает нам кнопку для ручного запуска
+  workflow_dispatch:
 
 jobs:
   build:
@@ -16,10 +16,10 @@ jobs:
       with:
         node-version: '20'
 
-    - name: Скачиваем нужные библиотеки
-      run: npm install
+    - name: Устанавливаем библиотеки
+      run: npm install node-telegram-bot-api axios
 
-    - name: ЗАПУСК СТАНКА (Тест ИИ)
+    - name: ЗАПУСК ПУЛЬТА УПРАВЛЕНИЯ
       env:
         TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
         POLZA_API_KEY: ${{ secrets.POLZA_API_KEY }}
