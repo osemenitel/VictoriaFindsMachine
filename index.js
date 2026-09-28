@@ -3,7 +3,7 @@ const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
 
 if (!TELEGRAM_TOKEN || !TELEGRAM_CHAT_ID || !RAPIDAPI_KEY) {
-  console.error('❌ Ошибка: Проверь секреты TELEGRAM_TOKEN, TELEGRAM_CHAT_ID и RAPIDAPI_KEY в GitHub!');
+  console.error('❌ Ошибка: Проверь секреты TELEGRAM_TOKEN, TELEGRAM_CHAT_ID и RAPIDAPI_KEY!');
   process.exit(1);
 }
 
@@ -17,28 +17,29 @@ async function sendTgLog(text) {
 }
 
 async function runFactory() {
-  console.log('🚀 Запуск боевого поиска в Douyin...');
+  console.log('🚀 Запуск поиска в TikTok...');
 
   try {
-    // 1. Поиск китайских трендов (гаджеты, изобретения, технологии)
-    const keyword = encodeURIComponent('黑科技 创意'); // Запрос: "Крутые технологии и изобретения"
-    const searchUrl = `https://douyin-api.p.rapidapi.com/api/search/video?count=10&offset=0&keyword=${keyword}`;
+    // 1. Поиск трендов (умные гаджеты из Китая)
+    const keyword = encodeURIComponent('smart gadgets china');
+    
+    // Точная ссылка по твоему скриншоту из RapidAPI
+    const searchUrl = `https://tiktok-api23.p.rapidapi.com/api/search/video?cursor=0&search_id=0&keyword=${keyword}`;
 
     const apiResponse = await fetch(searchUrl, {
       method: 'GET',
       headers: {
-        'x-rapidapi-host': 'douyin-api.p.rapidapi.com',
+        'x-rapidapi-host': 'tiktok-api23.p.rapidapi.com',
         'x-rapidapi-key': RAPIDAPI_KEY
       }
     });
 
     const data = await apiResponse.json();
     
-    // Безопасный поиск списка роликов в ответе API
-    const videoList = data?.data?.list || data?.aweme_list || data?.data?.videos || data?.data || [];
+    // Ищем список роликов в ответе API
+    const videoList = data?.data?.list || data?.item_list || data?.data?.videos || data?.data || [];
 
     if (!videoList.length || !Array.isArray(videoList)) {
-      console.log('Ответ API:', JSON.stringify(data).slice(0, 300));
       await sendTgLog(`⚠️ Парсер не вернул видео. Ответ API:\n\n${JSON.stringify(data).slice(0, 400)}`);
       return;
     }
@@ -46,35 +47,44 @@ async function runFactory() {
     // Выбираем случайное видео из выдачи
     const item = videoList[Math.floor(Math.random() * videoList.length)];
     
-    // Достаем прямую ссылку на видео
+    // Достаем ссылку на видеопоток
     const videoUrl = 
       item?.video?.play_addr?.url_list?.[0] || 
-      item?.play_addr?.url_list?.[0] || 
+      item?.video?.download_addr?.url_list?.[0] ||
+      item?.play_url ||
       item?.download_url || 
       item?.video_url;
 
-    const description = item?.desc || item?.title || 'Инновационная китайская разработка';
+    // Убираем лишние хештеги из описания
+    let description = item?.desc || item?.title || 'Китайская технологичная новинка';
+    description = description.replace(/#\w+/g, '').trim();
 
     if (!videoUrl) {
-      await sendTgLog(`⚠️ Ролик найден, но ссылка на видеопоток скрыта:\n${JSON.stringify(item).slice(0, 300)}`);
+      await sendTgLog(`⚠️ Ролик найден, но ссылка скрыта сервером:\n${JSON.stringify(item).slice(0, 300)}`);
       return;
     }
 
     console.log(`🎬 Найдено видео: ${description}`);
     console.log(`🔗 Скачиваем поток: ${videoUrl}`);
 
-    // 2. Скачиваем видео на сервер GitHub, чтобы отправить в Телеграм напрямую файлом
+    // 2. Скачиваем видео на сервер GitHub
     const videoStream = await fetch(videoUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
     });
+    
+    if (!videoStream.ok) {
+       await sendTgLog(`❌ Ошибка скачивания видео с серверов TikTok. Код: ${videoStream.status}`);
+       return;
+    }
+    
     const videoBlob = await videoStream.blob();
 
     // 3. Формируем публикацию для пульта
-    const captionText = `🔥 Народ, вы эту дичь видели?! ${description}.\n\nКитайцы опять пробили потолок! Берем или хлам? 👇`;
+    const captionText = `🔥 Народ, вы эту дичь видели?! ${description}.\n\nБерем или хлам? 👇`;
 
     const formData = new FormData();
     formData.append('chat_id', TELEGRAM_CHAT_ID);
-    formData.append('video', videoBlob, 'gadget.mp4');
+    formData.append('video', videoBlob, 'tiktok_gadget.mp4');
     formData.append('caption', captionText);
     formData.append('reply_markup', JSON.stringify({
       inline_keyboard: [
@@ -93,7 +103,7 @@ async function runFactory() {
 
     const tgData = await tgRes.json();
     if (tgData.ok) {
-      console.log('✅ Реальное китайское видео успешно на пульте!');
+      console.log('✅ TikTok видео успешно доставлено на пульт!');
       process.exit(0);
     } else {
       console.error('❌ Ошибка отправки в TG:', tgData);
