@@ -11,28 +11,27 @@ jobs:
       - name: Забираем файлы со склада
         uses: actions/checkout@v3
 
-      - name: Устанавливаем FFmpeg
-        uses: FedericoCarboni/setup-ffmpeg@v2
+      - name: Надежная установка FFmpeg (apt-get)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg jq
 
-      - name: Монтаж и отправка в Телеграм
+      - name: Монтаж и отправка
         env:
           BOT_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           CHAT_ID: ${{ github.event.client_payload.chat_id }}
           FILE_ID: ${{ github.event.client_payload.file_id }}
           EMOTION: ${{ github.event.client_payload.emotion }}
         run: |
-          echo "1. Получаем путь к видео..."
           FILE_PATH=$(curl -s "https://api.telegram.org/bot$BOT_TOKEN/getFile?file_id=$FILE_ID" | jq -r .result.file_path)
           
           if [ -z "$FILE_PATH" ] || [ "$FILE_PATH" == "null" ]; then
-            curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" -d chat_id=$CHAT_ID -d text="❌ Завод сообщает: Телеграм не отдал файл. Возможно, он слишком большой!"
+            curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" -d chat_id=$CHAT_ID -d text="❌ Ошибка: Телеграм не отдал файл."
             exit 1
           fi
 
-          echo "2. Скачиваем видео..."
           curl -s "https://api.telegram.org/file/bot$BOT_TOKEN/$FILE_PATH" -o input.mp4
           
-          echo "3. Вычисляем длину для обрезки концовки..."
           DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 input.mp4 || echo "0")
           if [ -z "$DURATION" ] || [ "$DURATION" == "0" ]; then
             TRIM_CMD=""
@@ -41,17 +40,24 @@ jobs:
             TRIM_CMD="-t $TRIM_TIME"
           fi
           
-          echo "4. Ищем картинку..."
           REAL_EMOTION=$(echo "$EMOTION" | sed 's/emo_//g')
           PIC="emo_$REAL_EMOTION"
           
-          echo "5. Запускаем бронебойный FFmpeg..."
-          # Защита от отсутствия звука (-map 0:a?) и жесткие настройки
-          ffmpeg -y $TRIM_CMD -i input.mp4 -i "$PIC" -filter_complex "[0:v]scale=iw*1.02:ih*1.02,crop=iw/1.02:ih/1.02[bg];[bg]split[main][toblur];[toblur]crop=iw*0.4:ih*0.12:iw*0.6:ih*0.88,boxblur=20:20[blurred];[main][blurred]overlay=W-w:H-h[with_blur];[1:v]scale=500:-1[logo];[with_blur][logo]overlay=W-w:max(H-h\,H-t*2.5*h)[out_v]" -map "[out_v]" -map 0:a? -c:a copy output.mp4
+          # Защита от нечетных размеров, правильный кодек libx264 и yuv420p для работы в ТГ
+          ffmpeg -y $TRIM_CMD -i input.mp4 -i "$PIC" -filter_complex "[0:v]scale=iw*1.02:ih*1.02,crop=iw/1.02:ih/1.02[bg];[bg]split[main][toblur];[toblur]crop=iw*0.4:ih*0.12:iw*0.6:ih*0.88,boxblur=20:20[blurred];[main][blurred]overlay=W-w:H-h[with_blur];[1:v]scale=500:-1[logo];[with_blur][logo]overlay=W-w:max(H-h\,H-t*2.5*h),scale=ceil(iw/2)*2:ceil(ih/2)*2[out_v]" -map "[out_v]" -map 0:a? -c:v libx264 -pix_fmt yuv420p -c:a aac output.mp4
           
-          echo "6. Отправляем в Телеграм..."
           curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendVideo" \
             -F chat_id=$CHAT_ID \
             -F video=@output.mp4 \
             -F caption="🔥 Готово!" \
             -F reply_markup='{"inline_keyboard": [[{"text": "🚀 Опубликовать в ВК", "callback_data": "post_vk"}]]}'
+
+      - name: Уведомление об ошибке монтажа
+        if: failure()
+        env:
+          BOT_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          CHAT_ID: ${{ github.event.client_payload.chat_id }}
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
+            -d chat_id=$CHAT_ID \
+            -d text="❌ Ошибка монтажа на сервере GitHub. Процесс прерван."
