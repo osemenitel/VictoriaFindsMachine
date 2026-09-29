@@ -28,7 +28,12 @@ jobs:
           curl -s "https://api.telegram.org/file/bot$BOT_TOKEN/$FILE_PATH" -o input.mp4
           
           echo "Начинаем уникализацию и наложение Виктории ($EMOTION)..."
-          ffmpeg -i input.mp4 -i $EMOTION -filter_complex "[0:v]scale=iw*1.02:ih*1.02,crop=iw/1.02:ih/1.02[bg];[1:v]scale=iw*0.25:-1[logo];[bg][logo]overlay=W-w-20:H-h-20" -c:a copy output.mp4
+          # Увеличили масштаб Виктории до 35% ширины (0.35) и прижали в самый угол (W-w:H-h)
+          ffmpeg -i input.mp4 -i $EMOTION -filter_complex "[0:v]scale=iw*1.02:ih*1.02,crop=iw/1.02:ih/1.02[bg];[1:v]scale=iw*0.35:-1[logo];[bg][logo]overlay=W-w:H-h" -c:a copy output.mp4
           
-          echo "Отправляем готовый шедевр обратно..."
-          curl -s -F chat_id=$CHAT_ID -F video=@output.mp4 -F caption="🔥 Видео уникализировано! Грузим в ВК?" "https://api.telegram.org/bot$BOT_TOKEN/sendVideo"
+          echo "Отправляем готовый шедевр обратно с кнопкой..."
+          curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendVideo" \
+            -F chat_id=$CHAT_ID \
+            -F video=@output.mp4 \
+            -F caption="🔥 Видео уникализировано! Грузим в ВК?" \
+            -F reply_markup='{"inline_keyboard": [[{"text": "🚀 Опубликовать в ВК", "callback_data": "post_vk"}]]}'
