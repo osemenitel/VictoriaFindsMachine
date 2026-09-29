@@ -21,21 +21,33 @@ jobs:
           FILE_ID: ${{ github.event.client_payload.file_id }}
           EMOTION: ${{ github.event.client_payload.emotion }}
         run: |
-          echo "Получаем путь к видео из Телеграма..."
+          echo "1. Получаем путь к файлу..."
           FILE_PATH=$(curl -s "https://api.telegram.org/bot$BOT_TOKEN/getFile?file_id=$FILE_ID" | jq -r .result.file_path)
           
-          echo "Скачиваем исходник..."
+          echo "2. Скачиваем видео..."
           curl -s "https://api.telegram.org/file/bot$BOT_TOKEN/$FILE_PATH" -o input.mp4
           
-          echo "Вычисляем точную длину видео..."
-          DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 input.mp4)
-          TRIM_TIME=$(awk -v d="$DURATION" 'BEGIN {print (d>3 ? d-2.5 : d)}')
+          echo "3. Вычисляем длину для обрезки концовки..."
+          DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 input.mp4 || echo "0")
           
-          echo "Монтируем: обрезка до $TRIM_TIME сек, уникализация + анимация..."
-          # Исправление: добавили emo_ перед названием файла
-          ffmpeg -t $TRIM_TIME -i input.mp4 -i emo_$EMOTION -filter_complex "[0:v]scale=iw*1.02:ih*1.02,crop=iw/1.02:ih/1.02[bg];[1:v]scale=iw*0.35:-1[logo];[bg][logo]overlay=W-w:max(H-h\,H-t*2.5*h)" -c:a copy output.mp4
+          # Бронебойная проверка длины
+          if [ -z "$DURATION" ] || [ "$DURATION" == "0" ]; then
+            echo "Не удалось узнать длину, монтируем без обрезки"
+            TRIM_CMD=""
+          else
+            TRIM_TIME=$(awk -v d="$DURATION" 'BEGIN {if (d>3) print d-2.5; else print d}')
+            TRIM_CMD="-t $TRIM_TIME"
+          fi
           
-          echo "Отправляем готовый шедевр обратно..."
+          echo "4. Умный поиск нужной картинки..."
+          # Убираем двойное emo_ если оно случайно появилось, чтобы всегда находить файл
+          REAL_EMOTION=$(echo "$EMOTION" | sed 's/emo_//g')
+          PIC="emo_$REAL_EMOTION"
+          
+          echo "5. Запускаем FFmpeg (Монтаж, уникализация, анимация)..."
+          ffmpeg $TRIM_CMD -i input.mp4 -i "$PIC" -filter_complex "[0:v]scale=iw*1.02:ih*1.02,crop=iw/1.02:ih/1.02[bg];[1:v]scale=iw*0.35:-1[logo];[bg][logo]overlay=W-w:max(H-h\,H-t*2.5*h)" -c:a copy output.mp4
+          
+          echo "6. Отправляем в Телеграм..."
           curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendVideo" \
             -F chat_id=$CHAT_ID \
             -F video=@output.mp4 \
