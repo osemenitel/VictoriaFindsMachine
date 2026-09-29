@@ -27,9 +27,8 @@ jobs:
           echo "Скачиваем исходник..."
           curl -s "https://api.telegram.org/file/bot$BOT_TOKEN/$FILE_PATH" -o input.mp4
           
-          echo "Начинаем уникализацию и наложение Виктории ($EMOTION)..."
-          # Увеличили масштаб Виктории до 35% ширины (0.35) и прижали в самый угол (W-w:H-h)
-          ffmpeg -i input.mp4 -i $EMOTION -filter_complex "[0:v]scale=iw*1.02:ih*1.02,crop=iw/1.02:ih/1.02[bg];[1:v]scale=iw*0.35:-1[logo];[bg][logo]overlay=W-w:H-h" -c:a copy output.mp4
+          echo "Монтируем: уникализация + анимация выползания Виктории ($EMOTION)..."
+          ffmpeg -i input.mp4 -i $EMOTION -filter_complex "[0:v]scale=iw*1.02:ih*1.02,crop=iw/1.02:ih/1.02[bg];[1:v]scale=iw*0.35:-1[logo];[bg][logo]overlay=W-w:max(H-h\,H-t*2.5*h)" -c:a copy output.mp4
           
           echo "Отправляем готовый шедевр обратно с кнопкой..."
           curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendVideo" \
