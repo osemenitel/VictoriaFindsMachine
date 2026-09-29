@@ -50,7 +50,6 @@ jobs:
 
           curl -s "https://api.telegram.org/file/bot$BOT_TOKEN/$FILE_PATH" -o input.mp4
 
-          # ЖЕСТКАЯ ОБРЕЗКА: Убираем ровно 3 секунды с конца (китайская концовка)
           DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 input.mp4 || echo "0")
           if [ -z "$DURATION" ] || [ "$DURATION" == "0" ]; then
             TRIM_CMD=""
@@ -74,8 +73,9 @@ jobs:
             exit 1
           fi
 
-          # ИДЕАЛЬНАЯ КОМПОЗИЦИЯ: Виктория в 2 раза меньше (scale=250:-1) и прижата в правый нижний угол (overlay=W-w-10:H-h-10)
-          if ! ffmpeg -y $TRIM_CMD -i input.mp4 -i "$PIC" -filter_complex "[0:v]scale=iw*1.02:ih*1.02,crop=iw/1.02:ih/1.02[bg];[bg]split[main][toblur];[toblur]crop=iw*0.4:ih*0.12:iw*0.6:ih*0.88,boxblur=20:20[blurred];[main][blurred]overlay=W-w:H-h[with_blur];[1:v]scale=250:-1[logo];[with_blur][logo]overlay=W-w-10:H-h-10,scale=ceil(iw/2)*2:ceil(ih/2)*2,format=yuv420p[out_v]" -map "[out_v]" -map 0:a? -c:v libx264 -preset veryfast -crf 23 -c:a aac -movflags +faststart output.mp4 2> ffmpeg.log; then
+          # ИЗМЕНЕНИЕ ЗДЕСЬ: Координаты изменены с overlay=W-w-10:H-h-10 на overlay=W-w-10:H-h 
+          # Теперь картинка вплотную прижата к нижнему краю, но имеет отступ 10px справа
+          if ! ffmpeg -y $TRIM_CMD -i input.mp4 -i "$PIC" -filter_complex "[0:v]scale=iw*1.02:ih*1.02,crop=iw/1.02:ih/1.02[bg];[bg]split[main][toblur];[toblur]crop=iw*0.4:ih*0.12:iw*0.6:ih*0.88,boxblur=20:20[blurred];[main][blurred]overlay=W-w:H-h[with_blur];[1:v]scale=250:-1[logo];[with_blur][logo]overlay=W-w-10:H-h,scale=ceil(iw/2)*2:ceil(ih/2)*2,format=yuv420p[out_v]" -map "[out_v]" -map 0:a? -c:v libx264 -preset veryfast -crf 23 -c:a aac -movflags +faststart output.mp4 2> ffmpeg.log; then
             say "❌ FFmpeg упал: $(tail -c 700 ffmpeg.log)"
             exit 1
           fi
