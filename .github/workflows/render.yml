@@ -40,11 +40,9 @@ jobs:
           REAL_EMOTION=$(echo "$EMOTION" | sed 's/emo_//g')
           PIC="emo_$REAL_EMOTION"
           
-          echo "5. Запускаем FFmpeg: Блюр вотермарки + Масштабирование + Анимация..."
-          # 1. scale2ref делает Викторию ровно 45% от ширины видео
-          # 2. boxblur наглухо замазывает правый нижний угол
-          # 3. overlay плавно выкатывает девушку снизу
-          ffmpeg $TRIM_CMD -i input.mp4 -i "$PIC" -filter_complex "[1:v][0:v]scale2ref=w=main_w*0.45:h=-1[logo][vid];[vid]scale=iw*1.02:ih*1.02,crop=iw/1.02:ih/1.02[bg];[bg]split[main][wmark];[wmark]crop=iw*0.38:ih*0.12:iw*0.62:ih*0.88,boxblur=15:10[blurred];[main][blurred]overlay=W-w:H-h[bg_blurred];[bg_blurred][logo]overlay=W-w:max(H-h\,H-t*2.5*h)" -c:a copy output.mp4
+          echo "5. Запускаем бронебойный FFmpeg..."
+          # Добавлен флаг -y. Виктория теперь ровно 500px. Угол жестко блюрится.
+          ffmpeg -y $TRIM_CMD -i input.mp4 -i "$PIC" -filter_complex "[0:v]scale=iw*1.02:ih*1.02,crop=iw/1.02:ih/1.02[bg];[bg]split[main][toblur];[toblur]crop=iw*0.4:ih*0.12:iw*0.6:ih*0.88,boxblur=20:20[blurred];[main][blurred]overlay=W-w:H-h[with_blur];[1:v]scale=500:-1[logo];[with_blur][logo]overlay=W-w:max(H-h\,H-t*2.5*h)" -c:a copy output.mp4
           
           echo "6. Отправляем в Телеграм..."
           curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendVideo" \
