@@ -27,8 +27,16 @@ jobs:
           echo "Скачиваем исходник..."
           curl -s "https://api.telegram.org/file/bot$BOT_TOKEN/$FILE_PATH" -o input.mp4
           
-          echo "Монтируем: уникализация + анимация выползания Виктории ($EMOTION)..."
-          ffmpeg -i input.mp4 -i $EMOTION -filter_complex "[0:v]scale=iw*1.02:ih*1.02,crop=iw/1.02:ih/1.02[bg];[1:v]scale=iw*0.35:-1[logo];[bg][logo]overlay=W-w:max(H-h\,H-t*2.5*h)" -c:a copy output.mp4
+          echo "Вычисляем точную длину видео..."
+          # Узнаем длину ролика в секундах с помощью ffprobe
+          DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 input.mp4)
+          
+          # Отнимаем 2.5 секунды (длина китайской концовки). Если видео короче 3 сек, не режем.
+          TRIM_TIME=$(awk -v d="$DURATION" 'BEGIN {print (d>3 ? d-2.5 : d)}')
+          
+          echo "Монтируем: обрезка до $TRIM_TIME сек, уникализация + анимация выползания ($EMOTION)..."
+          # Добавлен параметр -t $TRIM_TIME, который отрубает всё, что после этого времени
+          ffmpeg -t $TRIM_TIME -i input.mp4 -i $EMOTION -filter_complex "[0:v]scale=iw*1.02:ih*1.02,crop=iw/1.02:ih/1.02[bg];[1:v]scale=iw*0.35:-1[logo];[bg][logo]overlay=W-w:max(H-h\,H-t*2.5*h)" -c:a copy output.mp4
           
           echo "Отправляем готовый шедевр обратно с кнопкой..."
           curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendVideo" \
