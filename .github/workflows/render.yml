@@ -16,6 +16,16 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y ffmpeg jq
 
+      - name: Лечим русские буквы в названиях
+        run: |
+          # Автоматически переводим кириллические буквы-двойники в английские
+          for f in *.png; do
+            newname=$(echo "$f" | sed 'y/еоса/eoca/')
+            if [ "$f" != "$newname" ]; then
+              mv "$f" "$newname"
+            fi
+          done
+
       - name: Монтаж и отправка
         env:
           BOT_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
@@ -29,7 +39,7 @@ jobs:
           }
 
           if [ -z "$BOT_TOKEN" ]; then
-            echo "Секрет TELEGRAM_TOKEN пустой!"; exit 1
+            echo "Секрет пустой!"; exit 1
           fi
 
           GETFILE=$(curl -s "https://api.telegram.org/bot$BOT_TOKEN/getFile?file_id=$FILE_ID")
@@ -49,18 +59,24 @@ jobs:
             TRIM_CMD="-t $TRIM_TIME"
           fi
 
-          # УМНЫЙ ПОИСК КАРТИНКИ (удаляем пробелы и игнорируем регистр)
-          CLEAN_EMOTION=$(echo -n "$EMOTION" | tr -d '[:space:]' | sed 's/emo_//g')
-          EXPECTED_PIC="emo_${CLEAN_EMOTION}"
+          # Вытаскиваем главное слово (shock, laugh, think, facepalm, sign)
+          CORE_WORD=$(echo "$EMOTION" | grep -oE '(shock|laugh|think|facepalm|sign)' | head -n 1)
           
-          PIC=$(find . -maxdepth 1 -iname "$EXPECTED_PIC" | head -n 1)
-          
-          if [ -z "$PIC" ]; then
-            FILES_IN_DIR=$(ls *.png 2>/dev/null | tr '\n' ' ')
-            say "❌ Не найдена картинка $EXPECTED_PIC. Вот какие PNG есть на складе: $FILES_IN_DIR"
+          if [ -z "$CORE_WORD" ]; then
+            say "❌ Ошибка: не понял эмоцию: $EMOTION"
             exit 1
           fi
 
+          # Ищем любую PNG-картинку с этим словом
+          PIC=$(ls *.png 2>/dev/null | grep -i "$CORE_WORD" | head -n 1)
+
+          if [ -z "$PIC" ]; then
+            FILES=$(ls *.png 2>/dev/null | tr '\n' ' ')
+            say "❌ Не нашел картинку со словом '$CORE_WORD'. На складе лежат: $FILES"
+            exit 1
+          fi
+
+          # Запуск монтажа
           if ! ffmpeg -y $TRIM_CMD -i input.mp4 -i "$PIC" -filter_complex "[0:v]scale=iw*1.02:ih*1.02,crop=iw/1.02:ih/1.02[bg];[bg]split[main][toblur];[toblur]crop=iw*0.4:ih*0.12:iw*0.6:ih*0.88,boxblur=20:20[blurred];[main][blurred]overlay=W-w:H-h[with_blur];[1:v]scale=500:-1[logo];[with_blur][logo]overlay=W-w:max(H-h\,H-t*2.5*h),scale=ceil(iw/2)*2:ceil(ih/2)*2,format=yuv420p[out_v]" -map "[out_v]" -map 0:a? -c:v libx264 -preset veryfast -crf 23 -c:a aac -movflags +faststart output.mp4 2> ffmpeg.log; then
             say "❌ FFmpeg упал: $(tail -c 700 ffmpeg.log)"
             exit 1
