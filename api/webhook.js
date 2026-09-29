@@ -1,12 +1,12 @@
 export default async function handler(req, res) {
-  // Броня: всегда возвращаем 200, чтобы Телеграм никогда больше не зависал
   try {
     if (req.method !== 'POST') return res.status(200).send('Webhook is active');
 
     const update = req.body || {};
     const TOKEN = process.env.TELEGRAM_TOKEN;
     const GH_TOKEN = process.env.GITHUB_TOKEN;
-    const REPO = 'osemenitels/VictoriaFindsMachine';
+    // ТУТ БЫЛА ОШИБКА. ТЕПЕРЬ ИМЯ ПРАВИЛЬНОЕ:
+    const REPO = 'osemenitel/VictoriaFindsMachine';
 
     if (update.message) {
       const chatId = update.message.chat?.id;
@@ -19,7 +19,7 @@ export default async function handler(req, res) {
         await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ chat_id: chatId, text: '👋 Бот воскрес! Жду видео (до 20 МБ, кидай как "Видео", а не как "Файл").' })
+          body: JSON.stringify({ chat_id: chatId, text: '⚙️ Система готова. Жду видео (до 20 МБ).' })
         });
         return res.status(200).send('OK');
       }
@@ -33,7 +33,7 @@ export default async function handler(req, res) {
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ 
               chat_id: chatId, 
-              text: '⚠️ ФАЙЛ БОЛЬШЕ 20 МБ! Телеграм блокирует такие загрузки ботам. Отправь через кнопку "Галерея", чтобы он сжался.',
+              text: '⚠️ ФАЙЛ БОЛЬШЕ 20 МБ! Отправь как "Видео" (Галерея), чтобы Телеграм его сжал.',
               reply_to_message_id: msgId
             })
           });
@@ -52,7 +52,7 @@ export default async function handler(req, res) {
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
             chat_id: chatId,
-            text: '🎬 Видео на базе! Какую эмоцию клеим?',
+            text: '🎬 Видео принято! Выбирай эмоцию:',
             reply_markup: keyboard,
             reply_to_message_id: msgId
           })
@@ -65,8 +65,16 @@ export default async function handler(req, res) {
       const cb = update.callback_query;
       const chatId = cb.message?.chat?.id;
       const emotion = cb.data;
+      const cbId = cb.id;
       
       if (!chatId) return res.status(200).send('OK');
+
+      // Отключаем часики на кнопке, чтобы она не зависала
+      await fetch(`https://api.telegram.org/bot${TOKEN}/answerCallbackQuery`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ callback_query_id: cbId })
+      });
 
       const origMsg = cb.message?.reply_to_message;
       const fileId = origMsg?.video?.file_id || origMsg?.document?.file_id || origMsg?.animation?.file_id;
@@ -75,7 +83,7 @@ export default async function handler(req, res) {
         await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ chat_id: chatId, text: '❌ Не нашел видео. Отправь заново.' })
+          body: JSON.stringify({ chat_id: chatId, text: '❌ Ошибка: видео не найдено.' })
         });
         return res.status(200).send('OK');
       }
@@ -83,13 +91,14 @@ export default async function handler(req, res) {
       await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ chat_id: chatId, text: '⚙️ Эмоция ушла в цех! Монтирую...' })
+        body: JSON.stringify({ chat_id: chatId, text: '⚙️ Заказ отправлен на завод...' })
       });
 
-      await fetch(`https://api.github.com/repos/${REPO}/dispatches`, {
+      // Отправляем сигнал на GitHub
+      const ghRes = await fetch(`https://api.github.com/repos/${REPO}/dispatches`, {
         method: 'POST',
         headers: {
-          'Authorization': `token ${GH_TOKEN}`,
+          'Authorization': `Bearer ${GH_TOKEN}`,
           'Accept': 'application/vnd.github.v3+json',
           'Content-Type': 'application/json',
           'User-Agent': 'Vercel-Webhook'
@@ -99,6 +108,17 @@ export default async function handler(req, res) {
           client_payload: { chat_id: chatId, file_id: fileId, emotion: emotion }
         })
       });
+
+      // Умная обработка ошибок: если GitHub откажет, бот напишет почему
+      if (!ghRes.ok) {
+        const errText = await ghRes.text();
+        await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ chat_id: chatId, text: `❌ Ошибка связи с GitHub (${ghRes.status}): ${errText}` })
+        });
+      }
+
       return res.status(200).send('OK');
     }
 
@@ -109,4 +129,3 @@ export default async function handler(req, res) {
     return res.status(200).send('OK');
   }
 }
-
