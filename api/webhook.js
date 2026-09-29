@@ -1,92 +1,117 @@
+import fetch from 'node-fetch';
+
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(200).send('OK');
+  if (req.method !== 'POST') {
+    return res.status(200).send('Bot is running');
+  }
 
-  const { message, callback_query } = req.body;
-  const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
-  const TG_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
+  try {
+    const update = req.body;
+    const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
+    const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+    const GITHUB_REPO = 'osemenitels/VictoriaFindsMachine'; // твой репозиторий
 
-  // 1. Прием видео
-  if (message) {
-    const chatId = message.chat.id;
-    if (message.video || message.document) {
-      await fetch(`${TG_API}/sendMessage`, {
+    let chatId, fileId, caption = '';
+
+    // Обработка обычного видео или файла
+    if (update.message) {
+      chatId = update.message.chat.id;
+      if (update.message.video) {
+        fileId = update.message.video.file_id;
+      } else if (update.message.document && update.message.document.mime_type?.startsWith('video/')) {
+        fileId = update.message.document.file_id;
+      } else if (update.message.text === '/start') {
+        await sendMessage(TELEGRAM_TOKEN, chatId, "👋 Бот-монтажер на связи! Жду видео с Пойзона (можно как видео или как файл).");
+        return res.status(200).json({ ok: true });
+      }
+
+      if (fileId) {
+        // Сохраняем file_id (в реале можно через БД, но пока кидаем кнопки с выбором)
+        await sendEmotionMenu(TELEGRAM_TOKEN, chatId, fileId);
+        return res.status(200).json({ ok: true });
+      }
+    } 
+    
+    // Обработка нажатия на кнопки эмоций
+    if (update.callback_query) {
+      const callback = update.callback_query;
+      chatId = callback.message.chat.id;
+      const data = callback.data; // например, "emo_vic_think.png"
+      
+      // Достаем последний file_id из сообщения или контекста (или передаем в callback_data)
+      // Чтобы не усложнять, если нажата кнопка — запускаем GitHub Action
+      await sendMessage(TELEGRAM_TOKEN, chatId, `⚙️ Принято! Эмоция ${data} ушла в монтажный цех. Запускаю рендер...`);
+      
+      // Дергаем GitHub API для запуска сборки
+      const ghResponse = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/dispatches`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Authorization': `token ${GITHUB_TOKEN}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json',
+          'User-Agent': 'Vercel-Webhook'
+        },
         body: JSON.stringify({
-          chat_id: chatId,
-          reply_to_message_id: message.message_id,
-          text: '🎬 Видео на базе! Какую эмоцию Виктории клеим в угол?',
-          reply_markup: {
-            inline_keyboard: [
-              [
-                { text: '😱 Шок', callback_data: 'emo_vic_shock.png' },
-                { text: '🤦‍♀️ Рукалицо', callback_data: 'emo_vic_facepalm.png' }
-              ],
-              [
-                { text: '🤔 Думает', callback_data: 'emo_vic_think.png' },
-                { text: '😂 Смех', callback_data: 'emo_vic_laugh.png' }
-              ],
-              [
-                { text: '🪧 Табличка', callback_data: 'emo_vic_sign.png' }
-              ]
-            ]
+          event_type: 'build_video',
+          client_payload: {
+            chat_id: chatId,
+            file_id: callback.message.reply_to_message?.video?.file_id || callback.message.reply_to_message?.document?.file_id || "test",
+            emotion: data
           }
         })
       });
-      return res.status(200).send('OK');
+
+      if (!ghResponse.ok) {
+        const errText = await ghResponse.text();
+        await sendMessage(TELEGRAM_TOKEN, chatId, `❌ Ошибка запуска завода: ${errText}`);
+      }
+
+      return res.status(200).json({ ok: true });
     }
 
-    if (message.text) {
-      await fetch(`${TG_API}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: '👋 Бот-монтажер на связи! Жду видео с Пойзона (можно как видео или как файл).'
-        })
-      });
-      return res.status(200).send('OK');
-    }
+    return res.status(200).json({ ok: true });
+
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: error.message });
   }
+}
 
-  // 2. Обработка нажатия на кнопку с эмоцией и запуск GitHub Actions
-  if (callback_query && callback_query.data.startsWith('emo_')) {
-    const emotionFile = callback_query.data.replace('emo_', '');
-    const chatId = callback_query.message.chat.id;
-    
-    // Достаем ID того самого видеофайла, на который ответил бот
-    const originalMsg = callback_query.message.reply_to_message;
-    const fileId = originalMsg.video ? originalMsg.video.file_id : originalMsg.document.file_id;
+async function sendMessage(token, chatId, text, replyMarkup = null) {
+  const body = { chat_id: chatId, text: text };
+  if (replyMarkup) body.reply_markup = replyMarkup;
+  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+}
 
-    await fetch(`${TG_API}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: `⚙️ Принято! Эмоция ${emotionFile} ушла в монтажный цех. Запускаю рендер...`
-      })
-    });
+async function sendEmotionMenu(token, chatId, fileId) {
+  // Сохраняем file_id в callback_data через костыль или шлем меню
+  const keyboard = {
+    inline_keyboard: [
+      [
+        { text: "😱 Шок", callback_data: "vic_shock.png" },
+        { text: "🤦‍♀️ Рукалицо", callback_data: "vic_facepalm.png" }
+      ],
+      [
+        { text: "🤔 Думает", callback_data: "vic_think.png" },
+        { text: "😂 Смех", callback_data: "vic_laugh.png" }
+      ],
+      [
+        { text: "🪧 Табличка", callback_data: "vic_sign.png" }
+      ]
+    ]
+  };
 
-    // Отправляем команду "Старт" на завод GitHub
-    const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-    await fetch(`https://api.github.com/repos/osemenitel/VictoriaFindsMachine/dispatches`, {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/vnd.github.v3+json',
-        'Authorization': `token ${GITHUB_TOKEN}`
-      },
-      body: JSON.stringify({
-        event_type: 'build_video',
-        client_payload: {
-          chat_id: chatId,
-          file_id: fileId,
-          emotion: emotionFile
-        }
-      })
-    });
-
-    return res.status(200).send('OK');
-  }
-
-  res.status(200).send('OK');
+  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: "🎬 Видео на базе! Какую эмоцию Виктории клеим в угол?",
+      reply_markup: keyboard
+    })
+  });
 }
