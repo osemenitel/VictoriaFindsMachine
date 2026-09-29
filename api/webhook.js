@@ -9,40 +9,42 @@ export default async function handler(req, res) {
     const update = req.body;
     const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
     const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-    const GITHUB_REPO = 'osemenitels/VictoriaFindsMachine'; // твой репозиторий
+    const GITHUB_REPO = 'osemenitels/VictoriaFindsMachine';
 
-    let chatId, fileId, caption = '';
-
-    // Обработка обычного видео или файла
+    // Обработка текстовых команд или видео
     if (update.message) {
-      chatId = update.message.chat.id;
-      if (update.message.video) {
-        fileId = update.message.video.file_id;
-      } else if (update.message.document && update.message.document.mime_type?.startsWith('video/')) {
-        fileId = update.message.document.file_id;
-      } else if (update.message.text === '/start') {
+      const chatId = update.message.chat.id;
+      const text = update.message.text;
+
+      if (text === '/start') {
         await sendMessage(TELEGRAM_TOKEN, chatId, "👋 Бот-монтажер на связи! Жду видео с Пойзона (можно как видео или как файл).");
         return res.status(200).json({ ok: true });
       }
 
+      let fileId = null;
+      if (update.message.video) {
+        fileId = update.message.video.file_id;
+      } else if (update.message.document && update.message.document.mime_type?.startsWith('video/')) {
+        fileId = update.message.document.file_id;
+      }
+
       if (fileId) {
-        // Сохраняем file_id (в реале можно через БД, но пока кидаем кнопки с выбором)
         await sendEmotionMenu(TELEGRAM_TOKEN, chatId, fileId);
         return res.status(200).json({ ok: true });
       }
     } 
     
-    // Обработка нажатия на кнопки эмоций
+    // Обработка нажатия на кнопки с эмоциями
     if (update.callback_query) {
       const callback = update.callback_query;
-      chatId = callback.message.chat.id;
-      const data = callback.data; // например, "emo_vic_think.png"
+      const chatId = callback.message.chat.id;
+      const data = callback.data; // формата "file_id:emotion"
       
-      // Достаем последний file_id из сообщения или контекста (или передаем в callback_data)
-      // Чтобы не усложнять, если нажата кнопка — запускаем GitHub Action
-      await sendMessage(TELEGRAM_TOKEN, chatId, `⚙️ Принято! Эмоция ${data} ушла в монтажный цех. Запускаю рендер...`);
+      const [fileId, emotion] = data.split(':');
       
-      // Дергаем GitHub API для запуска сборки
+      await sendMessage(TELEGRAM_TOKEN, chatId, `⚙️ Принято! Эмоция ушла в монтажный цех. Запускаю рендер...`);
+      
+      // Запуск сборки на GitHub Actions
       const ghResponse = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/dispatches`, {
         method: 'POST',
         headers: {
@@ -55,8 +57,8 @@ export default async function handler(req, res) {
           event_type: 'build_video',
           client_payload: {
             chat_id: chatId,
-            file_id: callback.message.reply_to_message?.video?.file_id || callback.message.reply_to_message?.document?.file_id || "test",
-            emotion: data
+            file_id: fileId,
+            emotion: emotion
           }
         })
       });
@@ -77,30 +79,27 @@ export default async function handler(req, res) {
   }
 }
 
-async function sendMessage(token, chatId, text, replyMarkup = null) {
-  const body = { chat_id: chatId, text: text };
-  if (replyMarkup) body.reply_markup = replyMarkup;
+async function sendMessage(token, chatId, text) {
   await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
+    body: JSON.stringify({ chat_id: chatId, text: text })
   });
 }
 
 async function sendEmotionMenu(token, chatId, fileId) {
-  // Сохраняем file_id в callback_data через костыль или шлем меню
   const keyboard = {
     inline_keyboard: [
       [
-        { text: "😱 Шок", callback_data: "vic_shock.png" },
-        { text: "🤦‍♀️ Рукалицо", callback_data: "vic_facepalm.png" }
+        { text: "😱 Шок", callback_data: `${fileId}:vic_shock.png` },
+        { text: "🤦‍♀️ Рукалицо", callback_data: `${fileId}:vic_facepalm.png` }
       ],
       [
-        { text: "🤔 Думает", callback_data: "vic_think.png" },
-        { text: "😂 Смех", callback_data: "vic_laugh.png" }
+        { text: "🤔 Думает", callback_data: `${fileId}:vic_think.png` },
+        { text: "😂 Смех", callback_data: `${fileId}:vic_laugh.png` }
       ],
       [
-        { text: "🪧 Табличка", callback_data: "vic_sign.png" }
+        { text: "🪧 Табличка", callback_data: `${fileId}:vic_sign.png` }
       ]
     ]
   };
